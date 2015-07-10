@@ -76,14 +76,12 @@
     }
 
     // We have to reset any mediaKeys before the attachSource call below
-    this.resetSrc_(videojs.bind(this, function afterMediaKeysReset () {
-      Html5DashJS.showErrors(this.elParent_);
+    Html5DashJS.showErrors(this.elParent_);
 
-      // Attach the source with any protection data
-      this.mediaPlayer_.attachSource(manifest, null, this.keySystemOptions_);
+    // Attach the source with any protection data
+    this.mediaPlayer_.attachSource(manifest, null, this.keySystemOptions_);
 
-      this.tech_.triggerReady();
-    }));
+    this.tech_.triggerReady();
   };
 
   /*
@@ -253,32 +251,11 @@
     return output;
   };
 
-  /*
-   * Helper function to clear any EME keys that may have been set on the video element
-   *
-   * The MediaKeys has to be explicitly set to null before any DRM content can be loaded into
-   * a video element that already contained DRM content.
-   */
-  Html5DashJS.prototype.resetSrc_ = function (callback) {
-    // In Chrome, MediaKeys can NOT be changed when a src is loaded in the video element
-    // Dash.js has a bug where it doesn't correctly reset the data so we do it manually
-    // The order of these two lines is important. The video element's src must be reset
-    // to allow `mediaKeys` to changed otherwise a DOMException is thrown.
-    if (this.el_) {
-      this.el_.src = '';
-      if (this.el_.setMediaKeys) {
-        this.el_.setMediaKeys(null).then(callback, callback);
-      } else {
-        callback();
-      }
-    }
-  };
-
   Html5DashJS.prototype.dispose = function () {
     if (this.mediaPlayer_) {
+      console.log('calling reset');
       this.mediaPlayer_.reset();
     }
-    this.resetSrc_(function noop(){});
   };
 
   // Only add the SourceHandler if the browser supports MediaSourceExtensions

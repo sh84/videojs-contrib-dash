@@ -16,7 +16,7 @@
   <script src="../../node_modules/video.js/dist/video-js/video.novtt.dev.js"></script>
 
   <!-- Dash.js -->
-  <script src="../../node_modules/dashjs/dist/dash.all.js"></script>
+  <script src="../../node_modules/dashjs/dist/dash.debug.js"></script>
 
   <!-- videojs-contrib-dash -->
   <script src="../../src/js/videojs-dash.js"></script>
@@ -33,6 +33,19 @@
           }
         }]
       });
+      player.play();
+      setTimeout(function () {
+        player.src({
+          src: "http://html5.cablelabs.com:8100/cenc/wvck/dash.mpd",
+          type: "application/dash+xml",
+          keySystemOptions: [{
+            name: "com.widevine.alpha",
+            options: {
+              "licenseUrl": "https://html5.cablelabs.com:8025"
+            }
+          }]
+        });
+      }, 2000);
     });
   </script>
 </body>
