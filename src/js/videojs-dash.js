@@ -39,21 +39,23 @@
     // Save the context after the first initialization for subsequent instances
     Html5DashJS.context_ = Html5DashJS.context_ || new Dash.di.DashContext();
 
-    // But make a fresh MediaPlayer each time the sourceHandler is used
-    this.mediaPlayer_ = new MediaPlayer(Html5DashJS.context_);
+    if (!tech.mediaPlayer_) {
+      // But make a fresh MediaPlayer each time the sourceHandler is used
+      tech.mediaPlayer_ = new MediaPlayer(Html5DashJS.context_);
 
-    // Must run controller before these two lines or else there is no
-    // element to bind to.
-    this.mediaPlayer_.startup();
-    this.mediaPlayer_.attachView(this.el_);
+      // Must run controller before these two lines or else there is no
+      // element to bind to.
+      tech.mediaPlayer_.startup();
+    }
+    tech.mediaPlayer_.attachView(this.el_);
 
     // Dash.js autoplays by default
     if (!options.autoplay) {
-      this.mediaPlayer_.setAutoPlay(false);
+      tech.mediaPlayer_.setAutoPlay(false);
     }
 
     // Fetches and parses the manifest - WARNING the callback is non-standard "error-last" style
-    this.mediaPlayer_.retrieveManifest(manifestSource, videojs.bind(this, this.initializeDashJS));
+    tech.mediaPlayer_.retrieveManifest(manifestSource, videojs.bind(this, this.initializeDashJS));
   }
 
   Html5DashJS.prototype.initializeDashJS = function (manifest, err) {
@@ -79,7 +81,7 @@
     Html5DashJS.showErrors(this.elParent_);
 
     // Attach the source with any protection data
-    this.mediaPlayer_.attachSource(manifest, null, this.keySystemOptions_);
+    this.tech_.mediaPlayer_.attachSource(manifest, null, this.keySystemOptions_);
 
     this.tech_.triggerReady();
   };
@@ -252,9 +254,9 @@
   };
 
   Html5DashJS.prototype.dispose = function () {
-    if (this.mediaPlayer_) {
+    if (this.tech_.mediaPlayer_) {
       console.log('calling reset');
-      this.mediaPlayer_.reset();
+      this.tech_.mediaPlayer_.reset();
     }
   };
 
