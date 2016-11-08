@@ -76,6 +76,12 @@ class Html5DashJS {
     this.mediaPlayer_.setProtectionData(this.keySystemOptions_);
     this.mediaPlayer_.attachSource(manifestSource);
 
+    this.mediaPlayer_.on('manifestloaded', () => {
+      // hack for double loadstart
+      this.tech_.off(this.tech_.el_, 'loadstart', 
+        this.tech_.constructor.prototype.successiveLoadStartListener_);
+    });
+
     this.tech_.triggerReady();
   }
 
