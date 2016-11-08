@@ -76,11 +76,15 @@ class Html5DashJS {
     this.mediaPlayer_.setProtectionData(this.keySystemOptions_);
     this.mediaPlayer_.attachSource(manifestSource);
 
-    this.mediaPlayer_.on('manifestloaded', () => {
-      // hack for double loadstart
-      this.tech_.off(this.tech_.el_, 'loadstart', 
-        this.tech_.constructor.prototype.successiveLoadStartListener_);
-    });
+    this.is_live = false;
+    if (this.mediaPlayer_.on) {
+        this.mediaPlayer_.on('manifestloaded', (data) => {
+        // hack for double loadstart
+        this.tech_.off(this.tech_.el_, 'loadstart', 
+          this.tech_.constructor.prototype.successiveLoadStartListener_);
+        this.is_live = data.type !== 'static';
+      });
+    }
 
     this.tech_.triggerReady();
   }
@@ -111,6 +115,10 @@ class Html5DashJS {
     }
 
     return output;
+  }
+
+  duration() {
+    return this.is_live ? Infinity : this.el_.duration;
   }
 
   dispose() {
