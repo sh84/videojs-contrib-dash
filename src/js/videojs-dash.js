@@ -7,6 +7,32 @@ let
     return Object.prototype.toString.call(a) === '[object Array]';
   };
 
+const detectIE = function() {
+  let ua = window.navigator.userAgent;
+
+  let msie = ua.indexOf('MSIE ');
+  if (msie > 0) {
+    // IE 10 or older => return version number
+    return parseInt(ua.substring(msie + 5, ua.indexOf('.', msie)), 10);
+  }
+
+  let trident = ua.indexOf('Trident/');
+  if (trident > 0) {
+    // IE 11 => return version number
+    let rv = ua.indexOf('rv:');
+    return parseInt(ua.substring(rv + 3, ua.indexOf('.', rv)), 10);
+  }
+
+  let edge = ua.indexOf('Edge/');
+  if (edge > 0) {
+    // Edge (IE 12+) => return version number
+    return parseInt(ua.substring(edge + 5, ua.indexOf('.', edge)), 10);
+  }
+
+  // other browser
+  return false;
+};
+
 /**
  * videojs-contrib-dash
  *
@@ -40,6 +66,17 @@ class Html5DashJS {
 
     let manifestSource = source.src;
     this.keySystemOptions_ = Html5DashJS.buildDashJSProtData(source.keySystemOptions);
+
+    if (detectIE() && this.keySystemOptions_['com.widevine.alpha']) {
+      // widevine not supported in IE
+      this.player.setTimeout(() => {
+        this.player.error({
+          code: 4, 
+          message: this.player.localize(this.player.options_.notSupportedMessage)
+        });
+      }, 0);
+      return this.tech_.triggerReady();
+    }
 
     this.player.dash.mediaPlayer = dashjs.MediaPlayer().create();
 
