@@ -123,6 +123,17 @@ class Html5DashJS {
       });
     }
 
+    // fix showing loader spinner before canplay
+    let can_show_seeking = false;
+    this.player.on('seeking', () => {
+      if (!can_show_seeking) {
+        this.player.removeClass('vjs-seeking');
+      }
+    });
+    this.player.on('canplay', () => {
+      can_show_seeking = true;
+    });
+
     this.tech_.triggerReady();
   }
 
