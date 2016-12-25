@@ -23,6 +23,7 @@ class Html5DashJS {
     this.el_ = tech.el();
     this.elParent_ = this.el_.parentNode;
     this.hasFiniteDuration_ = false;
+    this.playback_time = 0;
 
     // Do nothing if the src is falsey
     if (!source.src) {
@@ -258,7 +259,97 @@ class Html5DashJS {
     this.mediaPlayer_.setProtectionData(this.keySystemOptions_);
     this.mediaPlayer_.attachSource(manifestSource);
 
+    this.initDashHandlers();
+    this.fixShowLoader();
+
     this.tech_.triggerReady();
+  }
+
+  /*
+   * Add nandlers to dash mediaPlayer
+   */
+  initDashHandlers() {
+    const delete_threshold_time = 60, 
+          fire_threshold_time = 0.2,
+          scte35_scheme = 'urn:scte:scte35:2014:xml';
+    let scte35_events = {}, scte35_fired_events = {};
+    if (this.mediaPlayer_.on) {
+      this.mediaPlayer_.on('playbackTimeUpdated', data => {
+        this.playback_time = data.time;
+        var events_ids = Object.keys(scte35_events);
+        for (let id of events_ids) {
+          if (scte35_fired_events[id]) {
+            continue;
+          }
+          let event = scte35_events[id];
+          let id_event_now = this.playback_time > event.time_start - fire_threshold_time && 
+            this.playback_time < event.time_end;
+          if (id_event_now) {
+            scte35_fired_events[id] = true;
+            event.left_duration = event.time_end - this.playback_time;
+console.log('!!!!!!!!!! fire', this.playback_time, event);
+            this.player.trigger('scte35', event);
+          }
+        }
+      });
+
+      let first_manifest_updated = true;
+      this.mediaPlayer_.on('manifestUpdated', data => {
+        if (first_manifest_updated) {
+          first_manifest_updated = false;
+          this.is_live = this.mediaPlayer_.getActiveStream().getStreamInfo().manifestInfo.isDynamic;
+          // hack for double loadstart
+          this.tech_.off(
+            this.tech_.el_,
+            'loadstart', 
+            this.tech_.constructor.prototype.successiveLoadStartListener_
+          );
+        }
+
+        for (let period of data.manifest.Period_asArray) {
+          if (!period.EventStream_asArray) {
+            continue;
+          }
+          for (let event_stream of period.EventStream_asArray) {
+            if (!event_stream.Event_asArray || event_stream.schemeIdUri !== scte35_scheme) {
+              continue;
+            }
+            let timescale = event_stream.timescale || 1;
+            for (let event of event_stream.Event_asArray) {
+              if (!event.duration) {
+                continue;
+              }
+              let duration = event.duration / timescale;
+              let time_start = event.presentationTime / timescale;
+              let time_end = time_start + duration;
+              if (time_end + delete_threshold_time < this.playback_time) {
+                delete scte35_events[event.id];
+                delete scte35_fired_events[event.id];
+              } else {
+                scte35_events[event.id] = {time_start, time_end, duration, _event: event};
+              }
+            }
+          }
+        }
+console.log('!!!!!!!!!! manifestUpdated', this.playback_time, scte35_events);
+      });
+    }
+  }
+
+  /*
+   * Fix showing loader spinner before canplay
+   */
+  fixShowLoader() {
+    let can_show_seeking = false;
+    this.player.on('seeking', () => {
+      if (!can_show_seeking) {
+        this.player.removeClass('vjs-seeking');
+      }
+    });
+    this.player.on('canplay', () => {
+      can_show_seeking = true;
+    });
+>>>>>>> cbc41bb... add support for scte35 events
   }
 
   /*
