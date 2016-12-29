@@ -24,6 +24,8 @@ class Html5DashJS {
     this.elParent_ = this.el_.parentNode;
     this.hasFiniteDuration_ = false;
     this.playback_time = 0;
+    this.scte35_events = {};
+    this.scte35_fired_events = {};
 
     // Do nothing if the src is falsey
     if (!source.src) {
@@ -272,25 +274,31 @@ class Html5DashJS {
     const delete_threshold_time = 60, 
           fire_threshold_time = 0.2,
           scte35_scheme = 'urn:scte:scte35:2014:xml';
-    let scte35_events = {}, scte35_fired_events = {};
     if (this.mediaPlayer_.on) {
       this.mediaPlayer_.on('playbackTimeUpdated', data => {
         this.playback_time = data.time;
-        var events_ids = Object.keys(scte35_events);
+        var events_ids = Object.keys(this.scte35_events);
         for (let id of events_ids) {
-          if (scte35_fired_events[id]) {
+          if (this.scte35_fired_events[id]) {
             continue;
           }
-          let event = scte35_events[id];
+          let event = this.scte35_events[id];
           let id_event_now = this.playback_time > event.time_start - fire_threshold_time && 
             this.playback_time < event.time_end;
           if (id_event_now) {
-            scte35_fired_events[id] = true;
+            this.scte35_fired_events[id] = true;
             event.left_duration = event.time_end - this.playback_time;
-console.log('!!!!!!!!!! fire', this.playback_time, event);
             this.player.trigger('scte35', event);
           }
         }
+      });
+      this.mediaPlayer_.on('urn:scte:scte35:2014:xml', data => {
+        var timescale = data.event.eventStream.timescale || 1;
+        this.player.trigger('scte35_event', {
+          duration: data.event.duration / timescale,
+          id: data.event.id,
+          event: data.event
+        });
       });
 
       let first_manifest_updated = true;
@@ -323,15 +331,14 @@ console.log('!!!!!!!!!! fire', this.playback_time, event);
               let time_start = event.presentationTime / timescale;
               let time_end = time_start + duration;
               if (time_end + delete_threshold_time < this.playback_time) {
-                delete scte35_events[event.id];
-                delete scte35_fired_events[event.id];
+                delete this.scte35_events[event.id];
+                delete this.scte35_fired_events[event.id];
               } else {
-                scte35_events[event.id] = {time_start, time_end, duration, _event: event};
+                this.scte35_events[event.id] = {time_start, time_end, duration, _event: event};
               }
             }
           }
         }
-console.log('!!!!!!!!!! manifestUpdated', this.playback_time, scte35_events);
       });
     }
   }
