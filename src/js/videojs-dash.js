@@ -303,6 +303,10 @@ class Html5DashJS {
 
       let first_manifest_updated = true;
       this.mediaPlayer_.on('manifestUpdated', data => {
+        if (data.manifest.Error) {
+          this.player.error(this.player.localize(data.manifest.Error));
+          this.mediaPlayer_.reset();
+        }
         if (first_manifest_updated) {
           first_manifest_updated = false;
           this.is_live = this.mediaPlayer_.getActiveStream().getStreamInfo().manifestInfo.isDynamic;
