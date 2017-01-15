@@ -26,6 +26,7 @@ class Html5DashJS {
     this.playback_time = 0;
     this.scte35_events = {};
     this.scte35_fired_events = {};
+    this.scte35_fired_native_events = {};
 
     // Do nothing if the src is falsey
     if (!source.src) {
@@ -293,6 +294,10 @@ class Html5DashJS {
         }
       });
       this.mediaPlayer_.on('urn:scte:scte35:2014:xml', data => {
+        if (this.scte35_fired_native_events[data.event.id]) {
+          return;
+        }
+        this.scte35_fired_native_events[data.event.id] = true;
         var timescale = data.event.eventStream.timescale || 1;
         this.player.trigger('scte35_event', {
           duration: data.event.duration / timescale,
