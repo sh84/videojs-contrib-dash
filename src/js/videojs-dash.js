@@ -103,10 +103,10 @@ class Html5DashJS {
     this.mediaPlayer_.initialize();
 
     // Apply any options that are set
-    if (options.dash && options.dash.limitBitrateByPortal) {
-      this.mediaPlayer_.setLimitBitrateByPortal(true);
-    } else {
-      this.mediaPlayer_.setLimitBitrateByPortal(false);
+    if (options.dash) {
+      for (let key in options.dash) {
+        this.mediaPlayer_[key](options.dash[key]);
+      }
     }
 
     this.mediaPlayer_.attachView(this.el_);
