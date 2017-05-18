@@ -27,6 +27,8 @@ class Html5DashJS {
     this.scte35_events = {};
     this.scte35_fired_events = {};
     this.scte35_fired_native_events = {};
+    this.video_update_timeout = null;
+    this.video_update_error = 'The video is temporarily unavailable, please try again later.';
 
     // Do nothing if the src is falsey
     if (!source.src) {
@@ -208,6 +210,14 @@ class Html5DashJS {
 
     // Apply all dash options that are set
     if (options.dash) {
+      if (options.dash.video_update_timeout) {
+        this.video_update_timeout = options.dash.video_update_timeout;
+        delete options.dash.video_update_timeout;
+      }
+      if (options.dash.video_update_error) {
+        this.video_update_error = options.dash.video_update_error;
+        delete options.dash.video_update_error;
+      }
       Object.keys(options.dash).forEach((key) => {
         if (key === 'useTTML') {
           return;
@@ -307,11 +317,29 @@ class Html5DashJS {
       });
 
       let first_manifest_updated = true;
+      let last_manifest_loaded_time, last_manifest_publish_time, last_manifest_change_publish_time;
       this.mediaPlayer_.on('manifestUpdated', data => {
         if (data.manifest.Error) {
           this.player.error(this.player.localize(data.manifest.Error));
           this.mediaPlayer_.reset();
         }
+
+        let changed_loaded_time = last_manifest_loaded_time*1 !== data.manifest.loadedTime*1;
+        if (this.video_update_timeout && changed_loaded_time && !first_manifest_updated) {
+          let changed_publish_time = last_manifest_publish_time*1 !== data.manifest.publishTime*1;
+          if (!changed_publish_time && last_manifest_change_publish_time) {
+            let diff_time = data.manifest.loadedTime*1 - last_manifest_change_publish_time*1;
+            if (diff_time > this.video_update_timeout * 1000) {
+              this.player.error(this.player.localize(this.video_update_error));
+              this.mediaPlayer_.reset();
+            }
+          } else {
+            last_manifest_change_publish_time = data.manifest.loadedTime;
+          }
+        }
+        last_manifest_loaded_time = data.manifest.loadedTime;
+        last_manifest_publish_time = data.manifest.publishTime;
+
         if (first_manifest_updated) {
           first_manifest_updated = false;
           this.is_live = this.mediaPlayer_.getActiveStream().getStreamInfo().manifestInfo.isDynamic;
