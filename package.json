@@ -30,7 +30,7 @@
     "video.js": "global:videojs"
   },
   "dependencies": {
-    "dashjs": "^2.2.0",
+    "dashjs": "2.3.0",
     "global": "^4.3.0",
     "video.js": "^5.0.0"
   },
