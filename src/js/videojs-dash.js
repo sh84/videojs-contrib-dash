@@ -39,40 +39,20 @@ const detectIE = function() {
  * Use Dash.js to playback DASH content inside of Video.js via a SourceHandler
  */
 class Html5DashJS {
-  constructor(source, tech, options) {
-    // Get options from tech if not provided for backwards compatibility
-    options = options || tech.options_;
-
+  constructor(source, tech, options = tech.options_) {
+    this.dash_options = options.dash || {};
     this.player = videojs(options.playerId);
     this.player.dash = this.player.dash || {};
-
     this.tech_ = tech;
     this.el_ = tech.el();
     this.elParent_ = this.el_.parentNode;
-    this.is_live = false;
-    this.playback_time = 0;
-    this.scte35_events = {};
-    this.scte35_fired_events = {};
-    this.scte35_fired_native_events = {};
-    this.video_update_timeout = null;
-    this.video_update_error = 'The video is temporarily unavailable, please try again later.';
 
     // Do nothing if the src is falsey
     if (!source.src) {
       return;
     }
-
-    // While the manifest is loading and Dash.js has not finished initializing
-    // we must defer events and functions calls with isReady_ and then `triggerReady`
-    // again later once everything is setup
-    tech.isReady_ = false;
-
-    if (Html5DashJS.updateSourceData) {
-      source = Html5DashJS.updateSourceData(source);
-    }
-
-    let manifestSource = source.src;
-    this.keySystemOptions_ = Html5DashJS.buildDashJSProtData(source.keySystemOptions);
+    this.source_ = Html5DashJS.updateSourceData ? Html5DashJS.updateSourceData(source) : source;
+    this.keySystemOptions_ = Html5DashJS.buildDashJSProtData(this.source_.keySystemOptions);
 
     if (detectIE() && this.keySystemOptions_['com.widevine.alpha']) {
       // widevine not supported in IE
@@ -82,12 +62,37 @@ class Html5DashJS {
           message: this.player.localize(this.player.options_.notSupportedMessage)
         });
       }, 0);
-      return this.tech_.triggerReady();
+      return;
     }
 
-    this.player.dash.mediaPlayer = dashjs.MediaPlayer().create();
+    // While the manifest is loading and Dash.js has not finished initializing
+    // we must defer events and functions calls with isReady_ and then `triggerReady`
+    // again later once everything is setup
+    this.tech_.isReady_ = false;
+    this.init();
+    this.tech_.triggerReady();
+  }
 
-    this.mediaPlayer_ = this.player.dash.mediaPlayer;
+  init() {
+    this.is_live = false;
+    this.playback_time = 0;
+    this.scte35_events = {};
+    this.scte35_fired_events = {};
+    this.scte35_fired_native_events = {};
+    this.first_manifest_updated = true;
+    this.last_manifest_loaded_time = null;
+    this.last_manifest_publish_time = null;
+    this.last_manifest_change_publish_time = null;
+    this.refrsh_after_error_timer = null;
+
+    const VIDEO_UPDATE_ERROR = 'The video is temporarily unavailable, please try again later.';
+    ({
+      video_update_timeout:       this.video_update_timeout = null,
+      video_update_error:         this.video_update_error = VIDEO_UPDATE_ERROR,
+      refrsh_after_error_timeout: this.refrsh_after_error_timeout = false
+    } = this.dash_options);
+
+    this.mediaPlayer_ = this.player.dash.mediaPlayer = dashjs.MediaPlayer().create();
 
     // Log MedaPlayer messages through video.js
     if (Html5DashJS.useVideoJSDebug) {
@@ -105,17 +110,10 @@ class Html5DashJS {
     this.mediaPlayer_.initialize();
 
     // Apply any options that are set
-    if (options.dash) {
-      if (options.dash.video_update_timeout) {
-        this.video_update_timeout = options.dash.video_update_timeout;
-        delete options.dash.video_update_timeout;
-      }
-      if (options.dash.video_update_error) {
-        this.video_update_error = options.dash.video_update_error;
-        delete options.dash.video_update_error;
-      }
-      for (let key in options.dash) {
-        this.mediaPlayer_[key](options.dash[key]);
+    for (let key in this.dash_options) {
+      let fn = this.mediaPlayer_[key];
+      if (typeof fn === 'function') {
+        this.mediaPlayer_[key](this.dash_options[key]);
       }
     }
 
@@ -126,12 +124,9 @@ class Html5DashJS {
 
     // Attach the source with any protection data
     this.mediaPlayer_.setProtectionData(this.keySystemOptions_);
-    this.mediaPlayer_.attachSource(manifestSource);
-
+    this.mediaPlayer_.attachSource(this.source_.src);
     this.initDashHandlers();
     this.fixShowLoader();
-
-    this.tech_.triggerReady();
   }
 
   /*
@@ -141,6 +136,7 @@ class Html5DashJS {
     const delete_threshold_time = 60, 
           fire_threshold_time = 0.2,
           scte35_scheme = 'urn:scte:scte35:2014:xml';
+
     if (this.mediaPlayer_.on) {
       this.mediaPlayer_.on('playbackTimeUpdated', data => {
         this.playback_time = data.time;
@@ -172,32 +168,22 @@ class Html5DashJS {
         });
       });
 
-      let first_manifest_updated = true;
-      let last_manifest_loaded_time, last_manifest_publish_time, last_manifest_change_publish_time;
+      
+      this.mediaPlayer_.on('internalManifestLoaded', data => {
+        if (data.error) {
+          this.raisePlayerError(data.error && data.error.message);
+        }
+      });
+
       this.mediaPlayer_.on('manifestUpdated', data => {
         if (data.manifest.Error) {
-          this.player.error(this.player.localize(data.manifest.Error));
-          this.mediaPlayer_.reset();
+          return this.raisePlayerError(data.manifest.Error);
         }
 
-        let changed_loaded_time = last_manifest_loaded_time*1 !== data.manifest.loadedTime*1;
-        if (this.video_update_timeout && changed_loaded_time && !first_manifest_updated) {
-          let changed_publish_time = last_manifest_publish_time*1 !== data.manifest.publishTime*1;
-          if (!changed_publish_time && last_manifest_change_publish_time) {
-            let diff_time = data.manifest.loadedTime*1 - last_manifest_change_publish_time*1;
-            if (diff_time > this.video_update_timeout * 1000) {
-              this.player.error(this.player.localize(this.video_update_error));
-              this.mediaPlayer_.reset();
-            }
-          } else {
-            last_manifest_change_publish_time = data.manifest.loadedTime;
-          }
-        }
-        last_manifest_loaded_time = data.manifest.loadedTime;
-        last_manifest_publish_time = data.manifest.publishTime;
+        this.checkVideoHang(data.manifest);
 
-        if (first_manifest_updated) {
-          first_manifest_updated = false;
+        if (this.first_manifest_updated) {
+          this.first_manifest_updated = false;
           this.is_live = this.mediaPlayer_.getActiveStream().getStreamInfo().manifestInfo.isDynamic;
           // hack for double loadstart
           this.tech_.off(
@@ -207,32 +193,88 @@ class Html5DashJS {
           );
         }
 
-        for (let period of data.manifest.Period_asArray) {
-          if (!period.EventStream_asArray) {
+        this.captureSCTE35(data.manifest, delete_threshold_time, scte35_scheme);
+      });
+    }
+  }
+
+  raisePlayerError(msg) {
+    this.player.error(this.player.localize(msg));
+    this.mediaPlayer_.reset();
+    if (this.refrsh_after_error_timeout) {
+      this.refrsh_after_error_timer = setTimeout(
+        this.refrshAfterError.bind(this), 
+        this.refrsh_after_error_timeout * 1000
+      );
+    }
+  }
+
+  refrshAfterError() {
+    if (!this.player.dash) {
+      return;
+    }
+    this.mediaPlayer_.retrieveManifest(this.source_.src, (manifest) => {
+      if (manifest && manifest.publishTime) {
+        let changed_publish_time = this.last_manifest_publish_time*1 !== manifest.publishTime*1;
+        if (!this.last_manifest_publish_time || changed_publish_time) {
+          this.player.error(null);
+          this.init();
+          this.player.pause();
+          setTimeout(() => {
+            this.player.play();
+          }, 200);
+        } else {
+          this.refrsh_after_error_timer = setTimeout(
+            this.refrshAfterError.bind(this), 
+            this.refrsh_after_error_timeout * 1000
+          );
+        }
+      }
+    });
+  }
+
+  checkVideoHang(manifest) {
+    let changed_loaded_time = this.last_manifest_loaded_time*1 !== manifest.loadedTime*1;
+    if (this.video_update_timeout && changed_loaded_time && !this.first_manifest_updated) {
+      let changed_publish_time = this.last_manifest_publish_time*1 !== manifest.publishTime*1;
+      if (!changed_publish_time && this.last_manifest_change_publish_time) {
+        let diff_time = manifest.loadedTime*1 - this.last_manifest_change_publish_time*1;
+        if (diff_time > this.video_update_timeout * 1000) {
+          this.raisePlayerError(this.video_update_error);
+        }
+      } else {
+        this.last_manifest_change_publish_time = manifest.loadedTime;
+      }
+    }
+    this.last_manifest_loaded_time = manifest.loadedTime;
+    this.last_manifest_publish_time = manifest.publishTime;
+  }
+
+  captureSCTE35(manifest, delete_threshold_time, scte35_scheme) {
+    for (let period of manifest.Period_asArray) {
+      if (!period.EventStream_asArray) {
+        continue;
+      }
+      for (let event_stream of period.EventStream_asArray) {
+        if (!event_stream.Event_asArray || event_stream.schemeIdUri !== scte35_scheme) {
+          continue;
+        }
+        let timescale = event_stream.timescale || 1;
+        for (let event of event_stream.Event_asArray) {
+          if (!event.duration) {
             continue;
           }
-          for (let event_stream of period.EventStream_asArray) {
-            if (!event_stream.Event_asArray || event_stream.schemeIdUri !== scte35_scheme) {
-              continue;
-            }
-            let timescale = event_stream.timescale || 1;
-            for (let event of event_stream.Event_asArray) {
-              if (!event.duration) {
-                continue;
-              }
-              let duration = event.duration / timescale;
-              let time_start = event.presentationTime / timescale;
-              let time_end = time_start + duration;
-              if (time_end + delete_threshold_time < this.playback_time) {
-                delete this.scte35_events[event.id];
-                delete this.scte35_fired_events[event.id];
-              } else {
-                this.scte35_events[event.id] = {time_start, time_end, duration, _event: event};
-              }
-            }
+          let duration = event.duration / timescale;
+          let time_start = event.presentationTime / timescale;
+          let time_end = time_start + duration;
+          if (time_end + delete_threshold_time < this.playback_time) {
+            delete this.scte35_events[event.id];
+            delete this.scte35_fired_events[event.id];
+          } else {
+            this.scte35_events[event.id] = {time_start, time_end, duration, _event: event};
           }
         }
-      });
+      }
     }
   }
 
@@ -290,6 +332,10 @@ class Html5DashJS {
 
     if (this.player.dash) {
       delete this.player.dash;
+    }
+
+    if (this.refrsh_after_error_timer) {
+      clearTimeout(this.refrsh_after_error_timer);
     }
   }
 }
