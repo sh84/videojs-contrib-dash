@@ -85,7 +85,9 @@ class Html5DashJS {
     this.last_manifest_change_publish_time = null;
     this.refrsh_after_error_timer = null;
 
-    const VIDEO_UPDATE_ERROR = 'The video is temporarily unavailable, please try again later.';
+    const VIDEO_UPDATE_ERROR = this.player.localize(
+      'The video is temporarily unavailable, please try again later.'
+    );
     ({
       video_update_timeout:       this.video_update_timeout = null,
       video_update_error:         this.video_update_error = VIDEO_UPDATE_ERROR,
