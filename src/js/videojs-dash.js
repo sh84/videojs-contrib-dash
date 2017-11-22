@@ -1,6 +1,5 @@
 import window from 'global/window';
 import videojs from 'video.js';
-import dashjs from 'dashjs';
 
 let
   isArray = function(a) {
@@ -94,7 +93,7 @@ class Html5DashJS {
       refrsh_after_error_timeout: this.refrsh_after_error_timeout = false
     } = this.dash_options);
 
-    this.mediaPlayer_ = this.player.dash.mediaPlayer = dashjs.MediaPlayer().create();
+    this.mediaPlayer_ = this.player.dash.mediaPlayer = window.dashjs.MediaPlayer().create();
 
     // Log MedaPlayer messages through video.js
     if (Html5DashJS.useVideoJSDebug) {
