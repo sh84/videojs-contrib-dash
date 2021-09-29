@@ -1,4 +1,4 @@
-import dashjs from 'dashjs';
+import window from 'global/window';
 import videojs from 'video.js';
 
 /**
@@ -94,7 +94,7 @@ function handlePlaybackMetadataLoaded(player, tech) {
   };
 
   videojsAudioTracks.addEventListener('change', audioTracksChangeHandler);
-  player.dash.mediaPlayer.on(dashjs.MediaPlayer.events.STREAM_TEARDOWN_COMPLETE, () => {
+  player.dash.mediaPlayer.on(window.dashjs.MediaPlayer.events.STREAM_TEARDOWN_COMPLETE, () => {
     videojsAudioTracks.removeEventListener('change', audioTracksChangeHandler);
   });
 }
@@ -106,7 +106,7 @@ function handlePlaybackMetadataLoaded(player, tech) {
 export default function setupAudioTracks(player, tech) {
   // When `dashjs` finishes loading metadata, create audio tracks for `video.js`.
   player.dash.mediaPlayer.on(
-    dashjs.MediaPlayer.events.PLAYBACK_METADATA_LOADED,
+    window.dashjs.MediaPlayer.events.PLAYBACK_METADATA_LOADED,
     handlePlaybackMetadataLoaded.bind(null, player, tech)
   );
 }

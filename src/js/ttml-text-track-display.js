@@ -1,5 +1,4 @@
 import videojs from 'video.js';
-import dashjs from 'dashjs';
 import window from 'global/window';
 
 const Component = videojs.getComponent('Component');
@@ -111,7 +110,7 @@ class TTMLTextTrackDisplay extends Component {
     for (let i = 0; i < selects.length; i++) {
       this.on(selects[i], 'change', this.updateStyle.bind(this));
     }
-    player.dash.mediaPlayer.on(dashjs.MediaPlayer.events.CAPTION_RENDERED,
+    player.dash.mediaPlayer.on(window.dashjs.MediaPlayer.events.CAPTION_RENDERED,
       this.updateStyle.bind(this));
   }
 

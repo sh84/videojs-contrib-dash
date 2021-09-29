@@ -233,22 +233,22 @@ class Html5DashJS {
     this.mediaPlayer_.on(window.dashjs.MediaPlayer.events.MANIFEST_LOADED, this.getDuration_);
 
     // Apply all dash options that are set
-    if (options.dash) {
-      if (options.dash.video_update_timeout) {
-        this.video_update_timeout = options.dash.video_update_timeout;
-        delete options.dash.video_update_timeout;
+    if (this.dash_options) {
+      if (this.dash_options.video_update_timeout) {
+        this.video_update_timeout = this.dash_options.video_update_timeout;
+        delete this.dash_options.video_update_timeout;
       }
-      if (options.dash.video_update_error) {
-        this.video_update_error = options.dash.video_update_error;
-        delete options.dash.video_update_error;
+      if (this.dash_options.video_update_error) {
+        this.video_update_error = this.dash_options.video_update_error;
+        delete this.dash_options.video_update_error;
       }
-      Object.keys(options.dash).forEach((key) => {
+      Object.keys(this.dash_options).forEach((key) => {
         if (key === 'useTTML') {
           return;
         }
 
         const dashOptionsKey = 'set' + key.charAt(0).toUpperCase() + key.slice(1);
-        let value = options.dash[key];
+        let value = this.dash_options[key];
 
         if (this.mediaPlayer_.hasOwnProperty(dashOptionsKey)) {
           // Providing a key without `set` prefix is now deprecated.
@@ -278,7 +278,7 @@ class Html5DashJS {
 
     this.mediaPlayer_.attachView(this.el_);
 
-    if (options.dash && options.dash.useTTML) {
+    if (this.dash_options && this.dash_options.useTTML) {
       this.ttmlContainer_ = this.player.addChild('TTMLTextTrackDisplay');
       this.mediaPlayer_.attachTTMLRenderingDiv(this.ttmlContainer_.el());
     }
@@ -287,10 +287,10 @@ class Html5DashJS {
     this.mediaPlayer_.setAutoPlay(false);
 
     // Setup audio tracks
-    setupAudioTracks.call(null, this.player, tech);
+    setupAudioTracks.call(null, this.player, this.tech_);
 
     // Setup text tracks
-    setupTextTracks.call(null, this.player, tech, options);
+    setupTextTracks.call(null, this.player, this.tech_, this.dash_options);
 
     // Attach the source with any protection data
     this.mediaPlayer_.setProtectionData(this.keySystemOptions_);
@@ -351,6 +351,9 @@ class Html5DashJS {
         this.checkVideoHang(data.manifest);
 
         if (this.first_manifest_updated) {
+          if (!this.mediaPlayer_.getActiveStream()) {
+            return;
+          }
           this.first_manifest_updated = false;
           this.is_live = this.mediaPlayer_.getActiveStream().getStreamInfo().manifestInfo.isDynamic;
           // hack for double loadstart
